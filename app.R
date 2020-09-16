@@ -89,7 +89,7 @@ server <- function(input, output, session) {
     })
     
     output$map <- renderLeaflet({
-        pal_fun <- colorNumeric("YlOrRd", domain = c(fillvar_min(), fillvar_max()))
+        pal_fun <- colorNumeric("GnBu", domain = c(fillvar_min(), fillvar_max()))
         
         leaflet(kart_kommunedata()) %>%
             addPolygons(stroke = TRUE, weight = 0.5, color = "black", smoothFactor = 0, 
