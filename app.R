@@ -10,6 +10,9 @@ library(haven)
 library(leaflet)
 library(waiter)
 
+css_fix <- "div.info.legend.leaflet-control br {clear: both;}" # CSS to correct spacing
+html_fix <- htmltools::tags$style(type = "text/css", css_fix)  # Convert CSS to HTML
+
 # Define UI for application that draws a histogram
 ui <- fluidPage(
 
@@ -31,6 +34,7 @@ ui <- fluidPage(
                         selected = NULL),
             selectInput("fillvar", label = "Velg hvilken variabel du vil vise på kartet",
                         choices = NULL),
+            textInput("fillvar_lab", label = "Fyll inn etikett for variabel (valgfritt)"),
             actionButton("plot", label = "Generer kart")
         ),
 
@@ -73,29 +77,30 @@ server <- function(input, output, session) {
     kart_kommunedata <- eventReactive(input$plot, {
         req(input$keyvar)
         left_join(kart(), kommunedata(), by = c("kommunenummer" = input$keyvar)) %>%
-            st_transform(4326)
+            st_transform(4326) %>%
+            mutate(fillvar = .[[input$fillvar]])
     })
     
-    fillvar <- reactive({
-        input$fillvar
-    })
-    
-    fillvar_min <- reactive({
-        min(kart_kommunedata()[[fillvar()]], na.rm = TRUE)
-    })
-    
-    fillvar_max <- reactive({
-        max(kart_kommunedata()[[fillvar()]], na.rm = TRUE)
+    fillvar_lab <- reactive({
+        if (input$fillvar_lab == "") 
+            input$fillvar
+        else
+            input$fillvar_lab
     })
     
     output$map <- renderLeaflet({
-        pal_fun <- colorNumeric("GnBu", domain = c(fillvar_min(), fillvar_max()))
+        pal_fun <- colorNumeric("GnBu", kart_kommunedata()$fillvar)
         
         leaflet(kart_kommunedata()) %>%
             addPolygons(stroke = TRUE, weight = 0.5, color = "black", smoothFactor = 0, 
-                        fillColor = ~pal_fun(kart_kommunedata()[[fillvar()]]),
+                        fillColor = ~pal_fun(fillvar),
                         fillOpacity = 0.7) %>%
-            addProviderTiles(provider = "Stamen.TonerLite")
+            addProviderTiles(provider = "Stamen.TonerLite") %>%
+            addLegend("bottomright", pal = pal_fun, values = ~fillvar,
+                      title = fillvar_lab(),
+                      opacity = 1
+            ) %>%
+            htmlwidgets::prependContent(html_fix)
         
     })
     
