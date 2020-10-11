@@ -61,7 +61,7 @@ server <- function(input, output, session) {
         if (tolower(file_ext(infile$datapath)) == "xlsx") {
             data <- read_xlsx(infile$datapath)
         } else if (tolower(file_ext(infile$datapath)) == "csv") {
-            data <- read_csv(infile$datapath)    
+            data <- read_csv2(infile$datapath)    
         } else if (tolower(file_ext(infile$datapath)) == "dta") {
             data <- read_dta(infile$datapath) %>%
                 mutate(across(where(is.labelled), as_factor))
