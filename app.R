@@ -9,19 +9,24 @@ library(readr)
 library(haven)
 library(leaflet)
 library(waiter)
+library(shinycssloaders)
+library(ggplot2)
+library(ggmap)
+library(RColorBrewer)
 
-css_fix <- "div.info.legend.leaflet-control br {clear: both;}" # CSS to correct spacing
-html_fix <- htmltools::tags$style(type = "text/css", css_fix)  # Convert CSS to HTML
+css_fix <- "div.info.legend.leaflet-control br {clear: both;}"
+html_fix <- as.character(htmltools::tags$style(type = "text/css", css_fix))
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
-
-    use_waiter(), # include dependencie
+    
+    HTML(html_fix),
+    
+    use_waiter(),
     
     # Application title
     titlePanel("Kommunekart"),
 
-    # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
             fileInput("kommune_fil", 
@@ -38,9 +43,11 @@ ui <- fluidPage(
             actionButton("plot", label = "Generer kart")
         ),
 
-        # Show a plot of the generated distribution
         mainPanel(
-            leafletOutput("map")
+            tabsetPanel(type = "tabs",
+                        tabPanel("Dynamisk kart", withSpinner(leafletOutput("map"))),
+                        tabPanel("Statisk kart", withSpinner(plotOutput("map_static")))
+            )
         ),
     )
 )
@@ -54,7 +61,7 @@ server <- function(input, output, session) {
         if (tolower(file_ext(infile$datapath)) == "xlsx") {
             data <- read_xlsx(infile$datapath)
         } else if (tolower(file_ext(infile$datapath)) == "csv") {
-            data <- read_csv(infile$datapath)    
+            data <- read_csv2(infile$datapath)    
         } else if (tolower(file_ext(infile$datapath)) == "dta") {
             data <- read_dta(infile$datapath) %>%
                 mutate(across(where(is.labelled), as_factor))
@@ -99,9 +106,16 @@ server <- function(input, output, session) {
             addLegend("bottomright", pal = pal_fun, values = ~fillvar,
                       title = fillvar_lab(),
                       opacity = 1
-            ) %>%
-            htmlwidgets::prependContent(html_fix)
-        
+            ) 
+    })
+    
+    output$map_static <- renderPlot({
+        ggplot(kart_kommunedata() %>% st_transform(25833)) +
+            geom_sf(aes(fill = fillvar)) +
+            scale_fill_gradientn(colours = brewer.pal(7, "GnBu"),
+                                 name = fillvar_lab(),
+                                 guide = guide_colorbar(reverse = TRUE)) +
+            theme_nothing(legend = TRUE) 
     })
     
 }
