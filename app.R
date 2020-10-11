@@ -13,9 +13,13 @@ library(shinycssloaders)
 library(ggplot2)
 library(ggmap)
 library(RColorBrewer)
+library(classInt)
+library(shinyjs)
+library(leafpop)
 
 css_fix <- "div.info.legend.leaflet-control br {clear: both;}"
 html_fix <- as.character(htmltools::tags$style(type = "text/css", css_fix))
+options("scipen" = 999)
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -23,6 +27,7 @@ ui <- fluidPage(
     HTML(html_fix),
     
     use_waiter(),
+    useShinyjs(),
     
     # Application title
     titlePanel("Kommunekart"),
@@ -39,16 +44,23 @@ ui <- fluidPage(
                         selected = NULL),
             selectInput("fillvar", label = "Velg hvilken variabel du vil vise på kartet",
                         choices = NULL),
+            radioButtons("fillvar_fmt", label = "Velg hvordan dataene skal vises på kartet",
+                        choices = c("Rådata", "Naturlig inndeling ('Jenks')", "Persentiler")),
+            sliderInput("fillvar_numcat", label = "Velg antall klasser", 
+                        min = 1, max = 20, step = 1, value = 5),
+            radioButtons("show_which", label = "Velg hvilke kommuner som skal vises",
+                         choices = c("Alle", "Kun kommuner med data")),
             textInput("fillvar_lab", label = "Fyll inn etikett for variabel (valgfritt)"),
-            actionButton("plot", label = "Generer kart")
+            actionButton("plot", label = "Generer kart"),
+            downloadButton("downloadPlot", "Last ned plot")
         ),
 
         mainPanel(
             tabsetPanel(type = "tabs",
-                        tabPanel("Dynamisk kart", withSpinner(leafletOutput("map"))),
+                        tabPanel("Dynamisk kart", withSpinner(leafletOutput("map", height = 700))),
                         tabPanel("Statisk kart", withSpinner(plotOutput("map_static")))
             )
-        ),
+        )
     )
 )
 
@@ -59,15 +71,16 @@ server <- function(input, output, session) {
         
         infile <- input$kommune_fil
         if (tolower(file_ext(infile$datapath)) == "xlsx") {
-            data <- read_xlsx(infile$datapath)
+            df <- read_xlsx(infile$datapath, col_types = "text")
         } else if (tolower(file_ext(infile$datapath)) == "csv") {
-            data <- read_csv2(infile$datapath)    
+            df <- read_csv2(infile$datapath, col_types = cols(.default = "c"))    
         } else if (tolower(file_ext(infile$datapath)) == "dta") {
-            data <- read_dta(infile$datapath) %>%
-                mutate(across(where(is.labelled), as_factor))
+            df <- read_dta(infile$datapath) %>%
+                mutate(across(where(is.labelled), as_factor)) %>%
+                mutate(across(where(is.numeric), as.character))
         }
         
-        return(data)
+        return(df)
     })
     
     observe({
@@ -77,15 +90,32 @@ server <- function(input, output, session) {
     })
     
     kart <- eventReactive(input$kommuneår, {
-        filnavn <- paste0("kommuner_", input$kommuneår, ".rds")
+        filnavn <- paste0("kommuner_", input$kommuneår, "_simplest.rds")
         readRDS(filnavn)
     })
     
     kart_kommunedata <- eventReactive(input$plot, {
         req(input$keyvar)
-        left_join(kart(), kommunedata(), by = c("kommunenummer" = input$keyvar)) %>%
-            st_transform(4326) %>%
-            mutate(fillvar = .[[input$fillvar]])
+        if(input$show_which == "Alle") {
+            d <- left_join(kart(), kommunedata(), by = c("kommunenummer" = input$keyvar)) %>%
+             st_transform(4326) %>% # Need EPSG:4326 for leaflet
+             mutate(fillvar = as.numeric(.[[input$fillvar]]))
+        } else {
+            d <- inner_join(kart(), kommunedata(), by = c("kommunenummer" = input$keyvar)) %>%
+                st_transform(4326) %>% # Need EPSG:4326 for leaflet
+                mutate(fillvar = as.numeric(.[[input$fillvar]]))
+        }
+        if (input$fillvar_fmt != "Rådata") {
+            if (input$fillvar_fmt == "Naturlig inndeling ('Jenks')") {
+                breaks <- classIntervals(d$fillvar, style = "jenks", n = input$fillvar_numcat)$brks
+            } else {
+                breaks <- quantile(d$fillvar, probs = seq(0, 1, by = (1 / input$fillvar_numcat)), na.rm = TRUE)
+            }
+            d <- d %>%
+                mutate(fillvar = cut(fillvar, breaks = breaks, include.lowest = TRUE, dig.lab = 10))
+        }
+        
+        return(d)
     })
     
     fillvar_lab <- reactive({
@@ -95,29 +125,75 @@ server <- function(input, output, session) {
             input$fillvar_lab
     })
     
+    observe({
+        if (input$fillvar_fmt == "Rådata") {
+            disable("fillvar_numcat")
+        } else {
+            enable("fillvar_numcat")
+        }
+    })
+    
     output$map <- renderLeaflet({
-        pal_fun <- colorNumeric("GnBu", kart_kommunedata()$fillvar)
+        if (input$fillvar_fmt != "Rådata") {
+            pal_fun <- colorFactor("GnBu", kart_kommunedata()$fillvar)
+        } else {
+            pal_fun <- colorNumeric("GnBu", kart_kommunedata()$fillvar)   
+        }
         
         leaflet(kart_kommunedata()) %>%
             addPolygons(stroke = TRUE, weight = 0.5, color = "black", smoothFactor = 0, 
                         fillColor = ~pal_fun(fillvar),
-                        fillOpacity = 0.7) %>%
-            addProviderTiles(provider = "Stamen.TonerLite") %>%
+                        fillOpacity = 0.7, 
+                        popup = popupTable(kart_kommunedata())) %>%
+            addProviderTiles(provider = "Stamen.TonerLite")  %>%
             addLegend("bottomright", pal = pal_fun, values = ~fillvar,
                       title = fillvar_lab(),
                       opacity = 1
-            ) 
+        )
+    })
+
+    data <- reactiveValues()
+    
+    data$map_static <- reactive({
+        
+        if (input$fillvar_fmt != "Rådata") {
+            kart_kommunedata() %>% 
+                st_transform(25833) %>% 
+                ggplot() +
+                geom_sf(aes(fill = fillvar)) +
+                scale_fill_brewer(palette = "GnBu", na.value = "#808080") +
+                labs(fill = fillvar_lab()) +
+                theme_nothing(legend = TRUE) +
+                theme(legend.title = element_text(size = 14),
+                      legend.text = element_text(size = 10))
+        } else {
+            kart_kommunedata() %>%
+                st_transform(25833) %>%
+                ggplot() +
+                geom_sf(aes(fill = fillvar)) +
+                scale_fill_gradientn(colours = brewer.pal(7, "GnBu"),
+                                     name = fillvar_lab(),
+                                     guide = guide_colorbar(reverse = TRUE)) +
+                labs(fill = fillvar_lab()) +
+                theme_nothing(legend = TRUE) +
+                theme(legend.title = element_text(size = 14),
+                      legend.text = element_text(size = 10))
+        }
     })
     
-    output$map_static <- renderPlot({
-        ggplot(kart_kommunedata() %>% st_transform(25833)) +
-            geom_sf(aes(fill = fillvar)) +
-            scale_fill_gradientn(colours = brewer.pal(7, "GnBu"),
-                                 name = fillvar_lab(),
-                                 guide = guide_colorbar(reverse = TRUE)) +
-            theme_nothing(legend = TRUE) 
+    output$map_static <- renderPlot(width = 700, height = 700, res = 96, {
+        data$map_static()
     })
     
+    output$downloadPlot <- downloadHandler(
+        filename = function(){paste("kommunekart_", input$fillvar, ".png" , sep= "")},
+        content = function(file) {
+            p <- data$map_static() +
+                theme(legend.title = element_text(size = 28),
+                      legend.text = element_text(size = 20),
+                      legend.key.size = unit(0.5, "in"))
+            ggsave(file, plot = p, width = 14, height = 14, dpi = 192, units = "in")
+        })
 }
 
 # Run the application 

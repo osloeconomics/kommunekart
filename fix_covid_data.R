@@ -1,7 +1,8 @@
 library(dplyr)
 library(sf)
+library(readr)
 
-covid <- read.csv2("antall-meldte-tilfeller.csv", encoding = "UTF-8") %>%
+covid <- read_csv2("antall-meldte-tilfeller.csv") %>%
   setNames(c("navn", "antall")) %>%
   mutate(navn = replace(navn, navn == "Norde Follo", "Nordre Follo"),
          navn = replace(navn, grepl("Porsanger", navn), "Porsanger"),
