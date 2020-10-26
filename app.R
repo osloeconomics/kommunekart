@@ -45,7 +45,7 @@ ui <- fluidPage(
             selectInput("fillvar", label = "Velg hvilken variabel du vil vise på kartet",
                         choices = NULL),
             radioButtons("fillvar_fmt", label = "Velg hvordan dataene skal vises på kartet",
-                        choices = c("Rådata", "Naturlig inndeling ('Jenks')", "Persentiler")),
+                        choices = c("Rådata", "Naturlig inndeling ('Jenks')", "Persentiler", "Diskrét")),
             sliderInput("fillvar_numcat", label = "Velg antall klasser", 
                         min = 1, max = 20, step = 1, value = 5),
             radioButtons("show_which", label = "Velg hvilke kommuner som skal vises",
@@ -91,26 +91,33 @@ server <- function(input, output, session) {
     
     kart <- eventReactive(input$kommuneår, {
         filnavn <- paste0("kommuner_", input$kommuneår, "_simplest.rds")
-        readRDS(filnavn)
+        readRDS(filnavn) %>%
+            st_set_crs(25833)
     })
     
     kart_kommunedata <- eventReactive(input$plot, {
         req(input$keyvar)
         if(input$show_which == "Alle") {
             d <- left_join(kart(), kommunedata(), by = c("kommunenummer" = input$keyvar)) %>%
-             st_transform(4326) %>% # Need EPSG:4326 for leaflet
-             mutate(fillvar = as.numeric(.[[input$fillvar]]))
+             st_transform(4326) # Need EPSG:4326 for leaflet
         } else {
             d <- inner_join(kart(), kommunedata(), by = c("kommunenummer" = input$keyvar)) %>%
-                st_transform(4326) %>% # Need EPSG:4326 for leaflet
-                mutate(fillvar = as.numeric(.[[input$fillvar]]))
+                st_transform(4326) # Need EPSG:4326 for leaflet
         }
-        if (input$fillvar_fmt != "Rådata") {
+        if (input$fillvar_fmt != "Diskrét") {
+            d <- d %>%
+                mutate(fillvar = as.numeric(.[[input$fillvar]]))
+        } else {
+            d <- d %>%
+                mutate(fillvar = .[[input$fillvar]])
+        }
+
+        if (input$fillvar_fmt %in% c("Naturlig inndeling ('Jenks')", "Persentiler")) {
             if (input$fillvar_fmt == "Naturlig inndeling ('Jenks')") {
                 breaks <- classIntervals(d$fillvar, style = "jenks", n = input$fillvar_numcat)$brks
-            } else {
+            } else if (input$fillvar_fmt == "Persentiler") {
                 breaks <- quantile(d$fillvar, probs = seq(0, 1, by = (1 / input$fillvar_numcat)), na.rm = TRUE)
-            }
+            } 
             d <- d %>%
                 mutate(fillvar = cut(fillvar, breaks = breaks, include.lowest = TRUE, dig.lab = 10))
         }
@@ -126,7 +133,7 @@ server <- function(input, output, session) {
     })
     
     observe({
-        if (input$fillvar_fmt == "Rådata") {
+        if (input$fillvar_fmt %in% c("Rådata", "Diskrét")) {
             disable("fillvar_numcat")
         } else {
             enable("fillvar_numcat")
@@ -134,9 +141,11 @@ server <- function(input, output, session) {
     })
     
     output$map <- renderLeaflet({
-        if (input$fillvar_fmt != "Rådata") {
+        if (input$fillvar_fmt %in% c("Naturlig inndeling ('Jenks')", "Persentiler")) {
             pal_fun <- colorFactor("GnBu", kart_kommunedata()$fillvar)
-        } else {
+        } else if (input$fillvar_fmt == "Diskrét") {
+            pal_fun <- colorFactor("Set2", kart_kommunedata()$fillvar)
+        } else if (input$fillvar_fmt == "Rådata") {
             pal_fun <- colorNumeric("GnBu", kart_kommunedata()$fillvar)   
         }
         
@@ -156,12 +165,22 @@ server <- function(input, output, session) {
     
     data$map_static <- reactive({
         
-        if (input$fillvar_fmt != "Rådata") {
+        if (input$fillvar_fmt %in% c("Naturlig inndeling ('Jenks')", "Persentiler")) {
             kart_kommunedata() %>% 
                 st_transform(25833) %>% 
                 ggplot() +
                 geom_sf(aes(fill = fillvar)) +
                 scale_fill_brewer(palette = "GnBu", na.value = "#808080") +
+                labs(fill = fillvar_lab()) +
+                theme_nothing(legend = TRUE) +
+                theme(legend.title = element_text(size = 14),
+                      legend.text = element_text(size = 10))
+        } else if (input$fillvar_fmt == "Diskrét") {
+            kart_kommunedata() %>% 
+                st_transform(25833) %>% 
+                ggplot() +
+                geom_sf(aes(fill = fillvar)) +
+                scale_fill_brewer(palette = "Set2", na.value = "#808080") +
                 labs(fill = fillvar_lab()) +
                 theme_nothing(legend = TRUE) +
                 theme(legend.title = element_text(size = 14),
