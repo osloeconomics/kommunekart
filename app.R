@@ -14,9 +14,10 @@ library(RColorBrewer)
 library(classInt)
 library(shinyjs)
 library(leafpop)
+library(htmltools)
 
 css_fix <- "div.info.legend.leaflet-control br {clear: both;}"
-html_fix <- as.character(htmltools::tags$style(type = "text/css", css_fix))
+html_fix <- as.character(tags$style(type = "text/css", css_fix))
 options("scipen" = 999)
 
 # Define UI for application that draws a histogram
@@ -38,7 +39,7 @@ ui <- fluidPage(
       selectInput("keyvar", label = "Variabel med kommunenummer",
                   choices = NULL),
       selectInput("kommuneår", label = "År for kommuneinndeling",
-                  choices = c("2020", "2019", "2018", "2017", "2016"),
+                  choices = c("2020"),
                   selected = NULL),
       selectInput("fillvar", label = "Variabel som skal plottes",
                   choices = NULL),
@@ -50,6 +51,9 @@ ui <- fluidPage(
                   min = 1, max = 20, step = 1, value = 5),
       radioButtons("show_which", label = "Kommuner som skal vises",
                    choices = c("Alle", "Kun kommuner med data")),
+      checkboxInput("fylke", label = "Vis fylkeomriss (kun 2020-inndeling per nå)", value = TRUE),
+      selectInput("border", label = "Farge på kommunegrenser",
+                  choices = c("Grå", "Svart", "Hvit", "Ingen")),
       selectInput("palette", 
                   label = markdown("Velg [fargepalett](https://colorbrewer2.org/)"),
                   choices = NULL),
