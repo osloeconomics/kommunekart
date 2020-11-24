@@ -178,7 +178,7 @@ server <- function(input, output, session) {
       pal_fun <- colorNumeric(input$palette, kart_kommunedata()$fillvar)   
     }
     
-    leaflet(kart_kommunedata()) %>%
+    lmap <- leaflet(kart_kommunedata()) %>%
       addPolygons(stroke = TRUE, weight = 0.5, color = "black", smoothFactor = 0, 
                   fillColor = ~pal_fun(fillvar),
                   fillOpacity = 0.7, 
@@ -188,17 +188,33 @@ server <- function(input, output, session) {
                 title = fillvar_lab(),
                 opacity = 1
       )
+    
+    lmap <- if (input$fylke == TRUE) {
+      filnavn <- paste0("fylker_", input$kommuneår, "_simplest.rds")
+      fylker <- readRDS(filnavn) %>%
+        st_set_crs(25833) %>%
+        st_transform(4326)
+      
+      lmap %>%
+        addPolygons(data = fylker, stroke = TRUE, weight = 1.2, color = "black")
+    } else {
+      lmap
+    }
   })
   
   data <- reactiveValues()
   
   data$map_static <- reactive({
     
+    bordercol <- case_when(input$border == "Grå" ~ "gray",
+                           input$border == "Svart" ~ "black",
+                           input$border == "Hvit" ~ "white")
+    
     if (input$fillvar_type == "Kontinuerlig" & input$fillvar_fmt == "Rådata") {
       kart_kommunedata() %>%
         st_transform(25833) %>%
         ggplot() +
-        geom_sf(aes(fill = fillvar)) +
+        geom_sf(aes(fill = fillvar), color = bordercol) +
         scale_fill_gradientn(colours = brewer.pal(7, "GnBu"),
                              name = fillvar_lab(),
                              guide = guide_colorbar(reverse = TRUE)) +
@@ -210,7 +226,7 @@ server <- function(input, output, session) {
       kart_kommunedata() %>% 
         st_transform(25833) %>% 
         ggplot() +
-        geom_sf(aes(fill = fillvar)) +
+        geom_sf(aes(fill = factor(fillvar)), color = bordercol) +
         scale_fill_brewer(palette = input$palette, na.value = "#808080") +
         labs(fill = fillvar_lab()) +
         theme_nothing(legend = TRUE) +
@@ -220,7 +236,16 @@ server <- function(input, output, session) {
   })
   
   output$map_static <- renderPlot(width = 700, height = 700, res = 96, {
-    data$map_static()
+    if (input$fylke == TRUE) {
+      filnavn <- paste0("fylker_", input$kommuneår, "_simplest.rds")
+      fylker <- readRDS(filnavn) %>%
+        st_set_crs(25833)
+      
+      data$map_static() + 
+        geom_sf(data = fylker, aes(), size = 0.8, fill = alpha(1, 0))
+    } else {
+      data$map_static()
+    }
   })
   
   output$downloadPlot <- downloadHandler(
@@ -230,6 +255,18 @@ server <- function(input, output, session) {
         theme(legend.title = element_text(size = 28),
               legend.text = element_text(size = 20),
               legend.key.size = unit(0.5, "in"))
+      
+      p <- if (input$fylke == TRUE) {
+        filnavn <- paste0("fylker_", input$kommuneår, "_simplest.rds")
+        fylker <- readRDS(filnavn) %>%
+          st_set_crs(25833)
+        
+        p + 
+          geom_sf(data = fylker, aes(), size = 0.8, fill = alpha(1, 0))
+      } else {
+        p
+      }
+      
       ggsave(file, plot = p, width = 14, height = 14, dpi = 192, units = "in")
     })
 }
