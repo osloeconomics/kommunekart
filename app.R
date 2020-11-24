@@ -55,8 +55,9 @@ ui <- fluidPage(
       selectInput("border", label = "Farge på kommunegrenser",
                   choices = c("Grå", "Svart", "Hvit", "Ingen")),
       selectInput("palette", 
-                  label = markdown("Velg [fargepalett](https://colorbrewer2.org/)"),
+                  label = a("Fargepalett", href = "https://colorbrewer2.org/", target = "_blank"),
                   choices = NULL),
+      checkboxInput("palette_rev", label = "Omvendt rekkefølge på farger", value = FALSE),
       textInput("fillvar_lab", label = "Overskrift for legenden (valgfritt)"),
       actionButton("plot", label = "Generer kart"),
       downloadButton("downloadPlot", "Last ned plot")
@@ -169,13 +170,16 @@ server <- function(input, output, session) {
   
   output$map <- renderLeaflet({
     if (input$fillvar_fmt %in% c("Naturlig inndeling ('Jenks')", "Persentiler")) {
-      pal_fun <- colorFactor(input$palette, kart_kommunedata()$fillvar)
+      pal_fun <- colorFactor(input$palette, kart_kommunedata()$fillvar,
+                             reverse = input$palette_rev)
     }
     if (input$fillvar_type == "Diskret") {
-      pal_fun <- colorFactor(input$palette, kart_kommunedata()$fillvar)
+      pal_fun <- colorFactor(input$palette, kart_kommunedata()$fillvar,
+                             reverse = input$palette_rev)
     }
     if (input$fillvar_type == "Kontinuerlig" & input$fillvar_fmt == "Rådata") {
-      pal_fun <- colorNumeric(input$palette, kart_kommunedata()$fillvar)   
+      pal_fun <- colorNumeric(input$palette, kart_kommunedata()$fillvar, 
+                              reverse = input$palette_rev)   
     }
     
     lmap <- leaflet(kart_kommunedata()) %>%
@@ -206,6 +210,8 @@ server <- function(input, output, session) {
   
   data$map_static <- reactive({
     
+    palette_dir <- ifelse(input$palette_rev == TRUE, -1, 1)
+    
     bordercol <- case_when(input$border == "Grå" ~ "gray",
                            input$border == "Svart" ~ "black",
                            input$border == "Hvit" ~ "white")
@@ -215,7 +221,9 @@ server <- function(input, output, session) {
         st_transform(25833) %>%
         ggplot() +
         geom_sf(aes(fill = fillvar), color = bordercol) +
-        scale_fill_gradientn(colours = brewer.pal(7, "GnBu"),
+        scale_fill_distiller(type = "div",
+                             palette = input$palette,
+                             direction = palette_dir,
                              name = fillvar_lab(),
                              guide = guide_colorbar(reverse = TRUE)) +
         labs(fill = fillvar_lab()) +
@@ -227,7 +235,8 @@ server <- function(input, output, session) {
         st_transform(25833) %>% 
         ggplot() +
         geom_sf(aes(fill = factor(fillvar)), color = bordercol) +
-        scale_fill_brewer(palette = input$palette, na.value = "#808080") +
+        scale_fill_brewer(palette = input$palette, direction = palette_dir, 
+                          na.value = "#808080") +
         labs(fill = fillvar_lab()) +
         theme_nothing(legend = TRUE) +
         theme(legend.title = element_text(size = 14),
