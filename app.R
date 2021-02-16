@@ -97,7 +97,7 @@ server <- function(input, output, session) {
   })
   
   kart <- eventReactive(input$kommuneår, {
-    filnavn <- paste0("kommuner_", input$kommuneår, "_simplest.rds")
+    filnavn <- paste0("kommuner_", input$kommuneår, "_simplest_2.rds")
     readRDS(filnavn) %>%
       st_set_crs(25833) %>%
       mutate(kommunenummer = as.numeric(kommunenummer))
@@ -194,7 +194,7 @@ server <- function(input, output, session) {
       )
     
     lmap <- if (input$fylke == TRUE) {
-      filnavn <- paste0("fylker_", input$kommuneår, "_simplest.rds")
+      filnavn <- paste0("fylker_", input$kommuneår, "_simplest_2.rds")
       fylker <- readRDS(filnavn) %>%
         st_set_crs(25833) %>%
         st_transform(4326)
@@ -229,7 +229,9 @@ server <- function(input, output, session) {
         labs(fill = fillvar_lab()) +
         theme_nothing(legend = TRUE) +
         theme(legend.title = element_text(size = 14),
-              legend.text = element_text(size = 10))
+              legend.text = element_text(size = 10),
+              legend.position = c(0.55, 0.5),
+              legend.justification = c("left", "top"))
       } else {
       kart_kommunedata() %>% 
         st_transform(25833) %>% 
@@ -240,13 +242,15 @@ server <- function(input, output, session) {
         labs(fill = fillvar_lab()) +
         theme_nothing(legend = TRUE) +
         theme(legend.title = element_text(size = 14),
-              legend.text = element_text(size = 10))  
+              legend.text = element_text(size = 10),
+              legend.position = c(0.55, 0.5),
+              legend.justification = c("left", "top"))
       }
   })
   
   output$map_static <- renderPlot(width = 700, height = 700, res = 96, {
     if (input$fylke == TRUE) {
-      filnavn <- paste0("fylker_", input$kommuneår, "_simplest.rds")
+      filnavn <- paste0("fylker_", input$kommuneår, "_simplest_2.rds")
       fylker <- readRDS(filnavn) %>%
         st_set_crs(25833)
       
@@ -263,10 +267,12 @@ server <- function(input, output, session) {
       p <- data$map_static() +
         theme(legend.title = element_text(size = 28),
               legend.text = element_text(size = 20),
-              legend.key.size = unit(0.5, "in"))
+              legend.key.size = unit(0.5, "in"),
+              legend.position = c(0.55, 0.5),
+              legend.justification = c("left", "top"))  
       
       p <- if (input$fylke == TRUE) {
-        filnavn <- paste0("fylker_", input$kommuneår, "_simplest.rds")
+        filnavn <- paste0("fylker_", input$kommuneår, "_simplest_2.rds")
         fylker <- readRDS(filnavn) %>%
           st_set_crs(25833)
         
