@@ -89,3 +89,4 @@ fyl2020 <- kom2020 %>%
 
 saveRDS(kom2020, "kommuner_2020_simplest_2.rds")
 saveRDS(fyl2020, "fylker_2020_simplest_2.rds")
+write_sf(fyl2020, "fylker_2020_simplest_2.geojson")
