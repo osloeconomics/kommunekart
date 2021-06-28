@@ -225,8 +225,7 @@ server <- function(input, output, session) {
                              palette = input$palette,
                              direction = palette_dir,
                              name = fillvar_lab(),
-                             guide = guide_colorbar(reverse = TRUE),
-                             na.value = "#cccccc") +
+                             guide = guide_colorbar(reverse = TRUE)) +
         labs(fill = fillvar_lab()) +
         theme_nothing(legend = TRUE) +
         theme(legend.title = element_text(size = 14),
@@ -239,7 +238,7 @@ server <- function(input, output, session) {
         ggplot() +
         geom_sf(aes(fill = factor(fillvar)), color = bordercol) +
         scale_fill_brewer(palette = input$palette, direction = palette_dir, 
-                          na.value = "#cccccc") +
+                          na.value = "#808080") +
         labs(fill = fillvar_lab()) +
         theme_nothing(legend = TRUE) +
         theme(legend.title = element_text(size = 14),
