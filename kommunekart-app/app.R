@@ -15,6 +15,7 @@ library(classInt)
 library(shinyjs)
 library(leafpop)
 library(htmltools)
+library(colourpicker)
 
 css_fix <- "div.info.legend.leaflet-control br {clear: both;}"
 html_fix <- as.character(tags$style(type = "text/css", css_fix))
@@ -52,12 +53,12 @@ ui <- fluidPage(
       radioButtons("show_which", label = "Kommuner som skal vises",
                    choices = c("Alle", "Kun kommuner med data")),
       checkboxInput("fylke", label = "Vis fylkeomriss (kun 2020-inndeling per nå)", value = TRUE),
-      selectInput("border", label = "Farge på kommunegrenser",
-                  choices = c("Grå", "Svart", "Hvit", "Ingen")),
+      colourInput("border", label = "Farge på kommunegrenser", value = "gray", allowTransparent = TRUE),
       selectInput("palette", 
                   label = a("Fargepalett", href = "https://colorbrewer2.org/", target = "_blank"),
                   choices = NULL),
       checkboxInput("palette_rev", label = "Omvendt rekkefølge på farger", value = FALSE),
+      colourInput("na_color", label = "Farge for manglende data", value = "#cccccc"),
       textInput("fillvar_lab", label = "Overskrift for legenden (valgfritt)"),
       actionButton("plot", label = "Generer kart"),
       downloadButton("downloadPlot", "Last ned plot")
@@ -220,13 +221,13 @@ server <- function(input, output, session) {
       kart_kommunedata() %>%
         st_transform(25833) %>%
         ggplot() +
-        geom_sf(aes(fill = fillvar), color = bordercol) +
+        geom_sf(aes(fill = fillvar), color = input$border) +
         scale_fill_distiller(type = "div",
                              palette = input$palette,
                              direction = palette_dir,
                              name = fillvar_lab(),
                              guide = guide_colorbar(reverse = TRUE),
-                             na.value = "#cccccc") +
+                             na.value = input$na_color) +
         labs(fill = fillvar_lab()) +
         theme_nothing(legend = TRUE) +
         theme(legend.title = element_text(size = 14),
@@ -237,9 +238,9 @@ server <- function(input, output, session) {
       kart_kommunedata() %>% 
         st_transform(25833) %>% 
         ggplot() +
-        geom_sf(aes(fill = factor(fillvar)), color = bordercol) +
+        geom_sf(aes(fill = factor(fillvar)), color = input$border) +
         scale_fill_brewer(palette = input$palette, direction = palette_dir, 
-                          na.value = "#cccccc") +
+                          na.value = input$na_color) +
         labs(fill = fillvar_lab()) +
         theme_nothing(legend = TRUE) +
         theme(legend.title = element_text(size = 14),

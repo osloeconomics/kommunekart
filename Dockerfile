@@ -31,7 +31,7 @@ libfontconfig1-dev
 RUN R -e "install.packages(c('shiny', 'sf', 'dplyr', 'readxl', 'leaflet'), repos='https://cloud.r-project.org/')"
 RUN R -e "install.packages(c('readr', 'haven', 'waiter', 'ggplot2', 'ggmap'), repos='https://cloud.r-project.org/')"
 RUN R -e "install.packages(c('shinycssloaders', 'classInt', 'shinyjs'), repos='https://cloud.r-project.org/')"
-RUN R -e "install.packages(c('RColorBrewer', 'leafpop', 'htmltools'), repos='https://cloud.r-project.org/')"
+RUN R -e "install.packages(c('RColorBrewer', 'leafpop', 'htmltools', 'colourpicker'), repos='https://cloud.r-project.org/')"
 
 # copy the example euler app (with the ui.R and server.R files)
 # onto the image in folder /root/euler
